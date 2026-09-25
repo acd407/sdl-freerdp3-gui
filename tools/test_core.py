@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""核心层测试：rdpfile / extraargs / profiles / schema / launch / Bridge。
+"""核心层测试：rdpfile / extraargs / profiles / schema / launch / AppController。
 
 不需要显示器（Qt 用 offscreen），使用临时的 XDG 目录，不碰你的真实配置。
 
@@ -17,7 +17,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-# 禁止产生 core dump —— 万一又踩到 QML/Qt 崩溃，不要往磁盘写几百 MB
+# 禁止产生 core dump —— 万一又踩到 Qt 崩溃，不要往磁盘写几百 MB
 ctypes.CDLL(ctypes.util.find_library("c"), use_errno=True).prctl(4, 0, 0, 0, 0)
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -29,7 +29,6 @@ os.environ["XDG_CONFIG_HOME"] = os.path.join(_TMP, "cfg")
 os.environ["XDG_RUNTIME_DIR"] = os.path.join(_TMP, "run")
 os.makedirs(os.environ["XDG_RUNTIME_DIR"], exist_ok=True)
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
-os.environ.setdefault("QT_QUICK_CONTROLS_STYLE", "Fusion")
 
 from core import extraargs, launch, profiles, schema  # noqa: E402
 from core.rdpfile import RdpFile  # noqa: E402
@@ -162,16 +161,16 @@ def test_schema() -> None:
             schema.BY_KEY["audiomode"].absent_value != schema.BY_KEY["audiomode"].default)
 
 
-# --------------------------------------------------------------- Bridge
+# --------------------------------------------------------------- AppController
 
-def test_bridge() -> None:
-    R.group("Bridge")
-    from PyQt6.QtGui import QGuiApplication
-    from app import Bridge
+def test_controller() -> None:
+    R.group("AppController")
+    from PyQt6.QtWidgets import QApplication
+    from ui.controller import AppController
 
-    _ = QGuiApplication.instance() or QGuiApplication([])
+    _ = QApplication.instance() or QApplication([])
     profiles.ensure_dirs()
-    b = Bridge()
+    b = AppController()
 
     # 新建草稿必须把「默认值 != 缺失行为」的字段显式写出来
     b.setField("full address", "10.1.2.3")
@@ -235,7 +234,7 @@ def main() -> int:
         test_extraargs()
         test_profiles()
         test_schema()
-        test_bridge()
+        test_controller()
         test_launch()
     finally:
         shutil.rmtree(_TMP, ignore_errors=True)

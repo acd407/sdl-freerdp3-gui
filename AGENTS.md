@@ -21,9 +21,9 @@ FreeRDP 3 的图形化连接管理器：**`.rdp` 配置编辑器 + 启动器**�
 |---|---|---|
 | FreeRDP | **3.31.1** | 系统包；`/usr/include/freerdp3` 的开发头文件**已安装**，探针因此能编译 |
 | Python | 3.14 | |
-| PyQt6 | 6.11.0 | **没有** `PyQt6.QtQuickControls2` 模块，所以只能用环境变量设样式，不能调 `QQuickStyle.setStyle()` |
-| Qt | 6.11.2 | `qt6-declarative` 提供 QtQuick Controls（所以「`qt6-quickcontrols2` 未安装」是假象） |
-| 样式 | Fusion | 通过 `QT_QUICK_CONTROLS_STYLE`；桌面风格，不依赖桌面环境 |
+| PyQt6 | 6.11.0 | 只用 `QtWidgets` / `QtCore` / `QtGui` |
+| Qt | 6.11.2 | |
+| 样式 | 系统 QStyle | QtWidgets 走 `QStyle`，**能跟随 Kvantum / qt6ct / 桌面主题**。实测 `QApplication.style().objectName() == "qt6ct-style"` 且 `libkvantum.so` 被加载。QtQuick Controls 不经过 `QStyle`，Kvantum 对它是像素级无效的——这正是从 QML 换到 QtWidgets 的原因（见 §9） |
 | 平台 | Wayland | `QT_QPA_PLATFORM=wayland;xcb` |
 
 **当前规模**：103 个 `.rdp` 键中实测 75 个有效，schema 收录 51 个字段 / 7 个分组。
@@ -32,7 +32,7 @@ FreeRDP 3 的图形化连接管理器：**`.rdp` 配置编辑器 + 启动器**�
 
 ```
 ├── sdl-freerdp3-gui      启动脚本（设环境变量后 exec python3 app.py）
-├── app.py                QML 桥：唯一的 Python ↔ QML 边界
+├── app.py                入口：QApplication + MainWindow
 ├── core/                 运行时全部逻辑，不依赖 Qt
 │   ├── rdpfile.py        .rdp 读写库（零依赖，可单独复用/发布）
 │   ├── extraargs.py      gui_extra_args 里命令行 token 的替换
@@ -40,27 +40,30 @@ FreeRDP 3 的图形化连接管理器：**`.rdp` 配置编辑器 + 启动器**�
 │   ├── schema.py         UI 字段表（分组 / 标签 / 控件 / 默认值 / absent）
 │   ├── profiles.py       配置的存取、软删除、GUI 状态
 │   └── launch.py         启动 sdl-freerdp3
-├── ui/
-│   ├── Main.qml          List-Detail 主界面
-│   └── FieldRow.qml      schema 驱动的单行表单组件
+├── ui/                   QtWidgets 界面
+│   ├── controller.py     状态 + 业务操作，只发信号、不碰 widget
+│   ├── fields.py         schema → 控件（FieldRow / CollapsibleSection）
+│   └── mainwindow.py     List-Detail 主界面
+├── research/             探索阶段的实测证据，不参与运行时
 └── tools/                开发与验证，不参与运行时
 ```
 
-**`core/` 里不允许 import Qt**（`app.py` 是唯一的 Qt 层）。这样核心逻辑可以脱离
-GUI 单测，也是「UI 可以整体换掉」的前提。
+**`core/` 里不允许 import Qt**（`ui/` 是唯一的 Qt 层）。这样核心逻辑可以脱离
+GUI 单测，也是「UI 可以整体换掉」的前提——事实上已经换过一次（QML → QtWidgets，
+见 §9）。
 
-## 4. 铁律：QML 里不允许出现 `.rdp` 语义
+## 4. 铁律：UI 层里不允许出现 `.rdp` 语义
 
-键名、类型、布尔反转、默认值、absent、序列化——**全部在 Python**。
-QML 只负责渲染和收集输入。
+键名、类型、布尔反转、默认值、absent、序列化——**全部在 `core/schema`**。
+UI（`ui/`）只负责渲染和收集输入。
 
 违反这条会让 UI 无法替换，并且让逻辑无法单测。具体表现：
 
-* QML 不得写死任何 `.rdp` 键名（`ui/FieldRow.qml` 只认 `fld.key` / `fld.widget`）
-* QML 不得做类型转换或布尔反转（`invert` 在 `schema.ui_to_file` 里处理）
-* QML 不得拼 `.rdp` 文本（`Bridge.previewText` 由 Python 生成）
+* UI 不得写死任何 `.rdp` 键名（`ui/fields.py` 只认 `fld.key` / `fld.widget`）
+* UI 不得做类型转换或布尔反转（`invert` 在 `schema.ui_to_file` 里处理）
+* UI 不得拼 `.rdp` 文本（`AppController.previewText` 由 Python 生成）
 
-同理，**`FieldRow.qml` 是按 `fld.widget` 分派的通用组件**——新增字段不需要改 QML。
+同理，**`FieldRow` 是按 `fld.widget` 分派的通用控件**——新增字段不需要改 `ui/`。
 
 ## 5. 数据流
 
@@ -71,7 +74,7 @@ selectProfile(name)                       newDraft()
   _reload_values()                     _reload_values(use_defaults=True)
       │ 缺失键 → f.absent_value             │ 缺失键 → f.default
       ▼                                        ▼
-   self._values : dict[str, Any]  ──►  QML 表单（fieldsChanged 时 sync()）
+   self._values : dict[str, Any]  ──►  控件（reloaded：全量；valueEdited：跳过有焦点的文本框）
       │
       │ setField(key, value)  ← 用户编辑
       ▼
@@ -83,8 +86,9 @@ selectProfile(name)                       newDraft()
 关键点：
 
 * `_collect()` 是**唯一的序列化出口**，遵循 absent 约束（见 §7）
-* `setField()` **默认不发 `fieldsChanged`**（否则正在编辑的输入框会被重置），
-  只发 `previewChanged`。只有 `gui_security` ↔ `gui_extra_args` 联动时才发
+* `_reload_values()` 发 `reloaded`（全量、强制覆盖）；`setField()` 发 `valueEdited`，
+  UI 同步时**跳过仍有焦点的 `QLineEdit`**（见 `FieldRow.set_value`），否则正在编辑、
+  尚未提交的输入框会被重置。QML 时期靠「setField 默认不发 fieldsChanged」达到同一目的
 * `saveAs` / `save` / `connectNow` 落盘后必须 `self._rdp = data`，
   否则紧接着的 `_reload_values()` 会从**旧内容**重算、清空表单（踩过）
 
@@ -145,7 +149,7 @@ selectProfile(name)                       newDraft()
 * **载入已有文件** → 缺失键显示 `absent_value`（**真实行为**，而不是我们希望的值）
 * **新建草稿**（`use_defaults=True`）→ 显示 `default`，这些值随后会被真正写进文件
 
-`Bridge.__init__` 的初始状态也是草稿，所以它也传 `use_defaults=True`（踩过）。
+`AppController.__init__` 的初始状态也是草稿，所以它也传 `use_defaults=True`（踩过）。
 
 ## 8. `.rdp` 键 ≠ 命令行开关
 
@@ -165,50 +169,38 @@ selectProfile(name)                       newDraft()
 另外记录一个顺序事实（`cmdline.c`）：**先加载 `.rdp`，再解析命令行**，
 所以命令行总是后者优先。
 
-## 9. QML / PyQt6 陷阱清单
+## 9. 为什么是 QtWidgets，而不是 QtQuick
 
-这些都是实测崩溃或渲染失败后确认的，改动 `ui/` 前先读一遍。
+这是实测结论，不是口味问题。
 
-### 会导致进程 abort
+| | QtWidgets（现在） | QtQuick Controls（以前） |
+|---|---|---|
+| 经过 `QStyle`？ | ✅ | ❌ |
+| Kvantum 主题 | ✅ 生效 | ❌ **像素级零影响** |
+| qt6ct / 桌面主题 | ✅ QStyle + palette + 字体 | ⚠️ 只有 palette / 字体 / 图标主题，且只有 `Fusion` 样式跟随 |
+| 控件样式选择 | 系统 `QStyle`（或 `QT_STYLE_OVERRIDE`） | `QT_QUICK_CONTROLS_STYLE`（QtQuick 专有） |
 
-1. **`engine.warnings` 的参数是 `QList<QQmlError>`（Python list）**。
-   写成 `lambda w: w.toString()` 会抛 `AttributeError`，被 PyQt6 升级成 `qFatal`。
-   正确写法见 `tools/check_qml.py`。
-2. **QML 自引用绑定**：`font.pixelSize: Math.round(font.pixelSize * 0.9)` → 绑定循环 → abort。
-3. **`SpinBox.value` 是 int**：把字符串 `Number()` 出来的 `NaN` 塞进去触发断言。
-   所以 `FieldRow.sync()` 按 `fld.widget` 分派，**不跨类型赋值**。
-4. **析构顺序**：`bridge`（Python QObject）必须先于 QML 引擎销毁，见 `app.py:shutdown()`。
-   顺序反了，QML 绑定会在 `bridge` 消失后求值，Qt 发 warning → PyQt6 升级成 `qFatal`。
+实测证据：用 `QApplication` 启动时 `QApplication.style().objectName() == "qt6ct-style"`
+且 `/proc/self/maps` 里出现 `libkvantum.so`；换成 `QGuiApplication` + QML 后，
+`libkvantum.so` **根本不会被加载**，`QT_STYLE_OVERRIDE=kvantum` 对界面像素无任何影响。
 
-> 排查这类问题时先看 `coredumpctl`，别反复触发崩溃（每次 dump 数 MB）。
+启动器因此**不设** `QT_QUICK_CONTROLS_STYLE`：那是 QtQuick 专有的，对 Widgets 无效。
 
-### 会导致表单空白 / 错位
+### 界面层约定
 
-5. **独立组件当 delegate 时，`index` / `modelData` 必须显式声明为 `required property`**，
-   否则 QML 不注入，取到 `undefined`。内联 `delegate: Frame {...}` 同理需要
-   `required property var modelData`。
-6. **不要直接绑 Python 的 `QVariantList<QVariantMap>`**。QML 对它的暴露方式是
-   「map 的键作为 role」，嵌套 Repeater 里 `modelData` 不可靠 → 传 JSON 字符串再 `JSON.parse`。
-7. **别把 `JSON.parse` 写在属性绑定里**。绑定会反复求值，每次产生**新数组**，
-   导致内层 Repeater 无限重建 delegate、旧 delegate 销毁后绑定仍在求值 → 刷屏报错。
-   只在 `Component.onCompleted` 里赋值一次。
-8. **加就绪门闩**：`model: schemaReady ? schemaModel : []`。否则内层 Repeater 会在数据
-   没就绪时先建一批 delegate，之后再重建 → 字段错位 + 空行。
-9. **`TextField` / `SpinBox` 在用户输入时会打断属性绑定**，所以不能在声明里绑 `text:`，
-   必须在 `sync()` 里显式同步，并由 `fieldsChanged` 触发。
-10. **属性名/方法名不能以大写开头**（`property var F`、`function L()` 都会报错）。
-11. **只给 `Layout.preferredWidth` 的控件会把自己的 preferred 当成最小宽度**，把整行卡住：
-    行宽 = 190(标签) + 控件 preferred + 间距。结果是宽输入框能随窗口收缩、而含
-    SpinBox(170) / ComboBox(280) 的行停在 490px 不缩 → 表单比面板宽 → 横向滚动条 +
-    右侧被裁切，且不同分组的行宽还不一致（实测 760px 窗口）。修法：这类控件改成
-    `Layout.fillWidth: true` + `Layout.maximumWidth: <原宽度>` + 一个较小的
-    `Layout.minimumWidth`——宽窗口下不超过原宽度，窄窗口下可以收缩。见 `ui/FieldRow.qml`。
-    连带的约束：标签列的 190px 无法再缩（给它更小的 `Layout.minimumWidth` 也无效），
-    所以 `Main.qml` 右侧面板的 `SplitView.minimumWidth` 必须容得下最宽的一行（现为 420）。
-12. **`ScrollView` 没有 `boundsBehavior`**（只在 `ListView`/`Flickable` 上有），直接写会
-    报 `Cannot assign to non-existent property`。桌面应用不需要 Qt 默认的越界回弹，
-    用 `Binding { target: sv.contentItem; property: "boundsBehavior"; value: Flickable.StopAtBounds }`
-    设到内置 Flickable 上（用 Binding 而不是 `onCompleted`，contentItem 换掉时仍生效）。
+1. `ui/` 不得出现 `.rdp` 语义（见 §4）
+2. `AppController` 不 import 任何 widget，只发信号；窗口订阅信号刷新自己。
+   所以业务逻辑能脱离控件单测（`tools/test_core.py` 的 `AppController` 一节）
+3. `FieldRow.set_value(force=False)` 会**跳过仍有焦点的 `QLineEdit`**；只有
+   `reloaded` 走 `force=True` 强制覆盖（例如「还原」时焦点仍在输入框里）
+4. 造控件 / 设值 / 取值的类型分派只在 `ui/fields.py` 一处，按 `fld.widget` 来，
+   不要跨类型赋值（`QSpinBox` 只能吃 int，`QComboBox` 用 `itemData` 存枚举值）
+5. `QListWidget` 重建期间要置 `_rebuilding` 门闩，否则 `currentRowChanged` 会在
+   填充过程中触发 `selectProfile`，把正在编辑的配置切走
+
+> 迁移前的 QML 踩坑清单（自引用绑定 → abort、Repeater delegate 要
+> `required property`、`ScrollView` 没有 `boundsBehavior`、`Layout.preferredWidth`
+> 会当最小宽度用……）已随 `ui/*.qml` 一起删除，需要时看 git 历史。
 
 ## 10. 检查与代码生成
 
@@ -221,18 +213,17 @@ python3 tools/genschema.py   # 换 FreeRDP 版本后重新生成 core/keymap.py
 
 | 脚本 | 作用 | 何时跑 |
 |---|---|---|
-| `tools/test_core.py` | 核心层单测（51 项），临时 XDG 目录 | 改 `core/` 或 `app.py` 后 |
-| `tools/check_qml.py` | 无头加载 `Main.qml`，断言 **0 条 QML 警告** | 改 `ui/` 后 |
+| `tools/test_core.py` | 核心层单测（51 项），临时 XDG 目录 | 改 `core/`、`ui/controller.py` 或 `app.py` 后 |
+| `tools/check_ui.py` | 离屏构建**真实主窗口**，断言 **0 条 Qt 警告** + 字段数 / 控件类型 / 编辑往返 | 改 `ui/` 后 |
 | `tools/audit_defaults.py` | 默认值审计（absent 约束） | 改 `core/schema.py` 后 |
 | `tools/genschema.py` | 重新生成 `core/keymap.py` | 升级 FreeRDP 后 |
 
-`tools/check_qml.py` 以「0 警告」为准而不是数控件个数：字段渲染失败的每种已知形态都会
-产生警告，而 `findChildren` 穿不透 Repeater 的 delegate、`objectCreated` 也不覆盖组件内部
-对象，都数不准。
+`tools/check_ui.py` 以「0 警告」为硬指标：字段渲染失败的形态都会先抛警告（控件造错类型、
+信号连到不存在的方法……），**0 警告 + 显式字段数断言**比单看个数可靠。
 
 ## 11. 如何新增一个字段
 
-**不需要改任何 QML**（表单由 schema 驱动）。步骤：
+**不需要改任何界面代码**（表单由 schema 驱动）。步骤：
 
 1. **确认这个键有效**。查 `core/keymap.py` 的 `KEY_SETTINGS`：值非空列表才算有效。
    若不在 `keys.txt` 里或 `KEY_SETTINGS` 为空，说明它是死键，不要加。
@@ -248,7 +239,8 @@ python3 tools/genschema.py   # 换 FreeRDP 版本后重新生成 core/keymap.py
 
 ### widget 类型
 
-`text` / `path`（TextField）、`int`（SpinBox）、`bool`（CheckBox）、`enum`（ComboBox，需 `options`）。
+`text` / `path`（QLineEdit）、`int`（QSpinBox）、`bool`（QCheckBox）、`enum`（QComboBox，需 `options`）。
+枚举选项的 `value` 存在 `itemData` 里，不要从显示文本反推。
 
 ### 反向键
 
@@ -257,11 +249,11 @@ python3 tools/genschema.py   # 换 FreeRDP 版本后重新生成 core/keymap.py
 
 ### 虚拟字段
 
-不对应任何 `.rdp` 键、由 `Bridge` 特殊处理的字段（如 `gui_security`）：
+不对应任何 `.rdp` 键、由 `AppController` 特殊处理的字段（如 `gui_security`）：
 
 1. 在 `schema.py` 定义 `Field`，并把 key 加进 `VIRTUAL_KEYS`
-2. 在 `Bridge._reload_values()` 里派生它的值
-3. 在 `Bridge.setField()` 里处理它的写入
+2. 在 `AppController._reload_values()` 里派生它的值
+3. 在 `AppController.setField()` 里处理它的写入
 4. `_collect()` 已自动跳过 `VIRTUAL_KEYS`
 
 ### 自定义键约定
@@ -286,4 +278,4 @@ FreeRDP 会忽略这些键，所以可以安全地存在同一个 `.rdp` 里。
 | 连接结果的错误分类 | 需要解析客户端 stderr，脆弱且随版本变化。实测过，不值得 |
 | 侧车配置文件 | 自定义键可以直接存在 `.rdp` 里，实测安全 |
 | 托盘图标 | 目标环境（niri）没有系统托盘 |
-| 暗色模式自动跟随 | niri 没有 portal 通知 Qt 明暗，暂时不管 |
+| 暗色模式自动跟随 | 得靠桌面 portal 通知 Qt。现在的做法是 QtWidgets 跟随系统 palette（qt6ct / Kvantum），想换深色就在那边换 color scheme；自动跟随仍然不管 |

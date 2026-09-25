@@ -3,7 +3,7 @@
 
 问题
 ----
-`Bridge._collect()` 只把「与 schema 默认值不同」的字段写进 .rdp。这要求
+`AppController._collect()` 只把「与 absent 不同」的字段写进 .rdp。这要求
 **schema 默认值 == FreeRDP 在该键缺失时的实际行为**。只要两者不同，用户选择
 「默认值」时那个键就会被跳过，行为随之改变（例如 audiomode：键缺失 = 音频全关，
 而 schema 默认写的是 0 = 本机播放）。

@@ -16,8 +16,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 
 CHECKS = [
-    ("核心层测试", HERE / "test_core.py", "单元测试：rdpfile / extraargs / profiles / schema / Bridge / launch"),
-    ("QML 加载", HERE / "check_qml.py", "无头加载 Main.qml，断言 0 条 QML 警告"),
+    ("核心层测试", HERE / "test_core.py", "单元测试：rdpfile / extraargs / profiles / schema / AppController / launch"),
+    ("界面冒烟", HERE / "check_ui.py", "离屏构建主窗口，断言 0 条 Qt 警告 + 字段数 / 控件类型 / 编辑往返"),
     ("默认值审计", HERE / "audit_defaults.py", "逐个字段验证「省略键」等价于「写入默认值」（调用 FreeRDP 探针，较慢）"),
 ]
 SLOW = {"默认值审计"}

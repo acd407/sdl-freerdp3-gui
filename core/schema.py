@@ -241,8 +241,8 @@ def _build() -> tuple[Group, ...]:
 GROUPS: tuple[Group, ...] = _build()
 BY_KEY: dict[str, Field] = {f.key: f for f in FIELDS}
 
-# 供 QML 使用的扁平结构
-SCHEMA_FOR_QML: list[dict[str, Any]] = [
+# 供 UI 层使用的扁平结构（QtWidgets 与 QML 时期同一份，不依赖任何 GUI 框架）
+SCHEMA_FOR_UI: list[dict[str, Any]] = [
     {
         "id": g.id,
         "title": g.title,

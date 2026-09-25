@@ -6,7 +6,10 @@ SELF="$(readlink -f "${BASH_SOURCE[0]}")"
 DIR="$(dirname "$SELF")"
 
 # Wayland 优先，回退 X11
-export QT_QUICK_CONTROLS_STYLE="${QT_QUICK_CONTROLS_STYLE:-Fusion}"
 export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-wayland;xcb}"
+
+# 不设 QT_QUICK_CONTROLS_STYLE —— 那是 QtQuick 专有的。QtWidgets 走系统
+# QStyle，会自动跟随 QT_QPA_PLATFORMTHEME（qt6ct / Kvantum / 桌面主题）。
+# 想固定某个 widget 样式时，用户可以用标准的 QT_STYLE_OVERRIDE 覆盖。
 
 exec python3 "$DIR/app.py" "$@"

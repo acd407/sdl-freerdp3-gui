@@ -28,7 +28,21 @@ ln -s "$HOME/repository/freerdp-gui/sdl-freerdp3-gui" ~/.local/bin/
 ./sdl-freerdp3-gui
 ```
 
-样式固定用 Qt 的 Fusion（`QT_QUICK_CONTROLS_STYLE`），桌面风格、不受桌面环境影响。
+## 主题
+
+样式走系统 `QStyle`，所以**跟随你的 Qt 主题**（qt6ct / Kvantum / 桌面主题）：
+配色方案、字体、控件样式都会生效。实测 `QApplication.style().objectName()`
+是 `qt6ct-style` 且加载了 `libkvantum.so`。
+
+想临时固定某个样式，用标准环境变量：
+
+```bash
+QT_STYLE_OVERRIDE=Fusion  ./sdl-freerdp3-gui    # 强制 Fusion
+QT_STYLE_OVERRIDE=kvantum ./sdl-freerdp3-gui   # 强制 Kvantum
+```
+
+历史：早期版本是 QML / QtQuick 界面，而 QtQuick Controls **不经过 `QStyle`**，
+Kvantum 对它是像素级无效的——这就是后来换成 QtWidgets 的原因。
 
 ## 使用
 

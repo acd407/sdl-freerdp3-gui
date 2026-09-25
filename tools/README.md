@@ -12,14 +12,13 @@ tools/check --quick      # 跳过较慢的默认值审计（约 4 秒）
 | 文件 | 作用 |
 |---|---|
 | **`check`** | 一键入口，依次跑下面三个并汇总 |
-| **`test_core.py`** | 核心层单元测试：`rdpfile` / `extraargs` / `profiles` / `schema` / `Bridge` / `launch`。用临时 XDG 目录，不碰真实配置 |
-| **`check_qml.py`** | 无头加载 `ui/Main.qml`，断言 **0 条 QML 警告** |
+| **`test_core.py`** | 核心层单元测试：`rdpfile` / `extraargs` / `profiles` / `schema` / `AppController` / `launch`。用临时 XDG 目录，不碰真实配置 |
+| **`check_ui.py`** | 离屏构建**真实主窗口**，断言 **0 条 Qt 警告** + 字段数 / 控件类型 / 一次编辑往返 |
 | **`audit_defaults.py`** | 逐个字段验证「省略该键」等价于「写入默认值」——见主 README 的「absent 约束」 |
 
-为什么 `check_qml.py` 以「0 警告」为准而不是数控件个数：字段渲染失败的每种已知形态都会产生警告
-（`fld` 未注入 → TypeError；Repeater 反复重建 → 旧 delegate 绑定报错；独立组件未声明
-`required property` → ReferenceError）。而 `findChildren` 穿不透 Repeater 的 delegate，
-`objectCreated` 也不覆盖组件内部对象，都数不准。
+为什么 `check_ui.py` 以「0 警告」为硬指标：控件造错类型、信号连到不存在的方法、
+在重建列表时误触发选择……这些都会先抛 Qt 警告；**0 警告 + 显式字段数断言**能盖住
+纯看控件个数漏掉的形态。
 
 ## 代码生成
 
