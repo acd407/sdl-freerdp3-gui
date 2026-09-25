@@ -39,6 +39,8 @@ FreeRDP 3 的图形化连接管理器：**`.rdp` 配置编辑器 + 启动器**�
 │   ├── keymap.py         【自动生成】键 → 类型 → 它驱动的 settings
 │   ├── schema.py         UI 字段表（分组 / 标签 / 控件 / 默认值 / absent）
 │   ├── profiles.py       配置的存取、软删除、GUI 状态
+│   ├── secrets.py        系统钥匙串（Secret Service）存取密码
+│   ├── askpass.py        【独立脚本】供 sdl-freerdp3 的 FREERDP_ASKPASS 调用
 │   └── launch.py         启动 sdl-freerdp3
 ├── ui/                   QtWidgets 界面
 │   ├── controller.py     状态 + 业务操作，只发信号、不碰 widget
@@ -99,7 +101,7 @@ selectProfile(name)                       newDraft()
 | **只用正向布尔键** | `disableclipboardredirection` / `disableprinterredirection` 是死键（settings 枚举里根本没有），实测无任何效果。反向键只保留 settings 枚举里确实存在的那批（`disable wallpaper` 等） |
 | **「额外命令行参数」字段必需** | FreeRDP 的 103 个 `.rdp` 键里**没有任何安全层 / 证书键**。`/sec:tls` 和 `/cert:ignore` 只能走命令行 |
 | **「安全方式」是虚拟字段** | 不写 `.rdp`，而是把 `/sec:...` 写进 `gui_extra_args`；替换时保留其余手写参数 |
-| **GUI 不实现密码对话框** | `sdl-freerdp3` 自带凭据窗口（实测 `app-id=com.freerdp.client.sdl3`，标题 `Credentials required for <host>`），且它**不读 stdin**（`/from-stdin` 会因缺 TTY 报 `tcgetattr` 错） |
+| **GUI 不实现密码对话框** | `sdl-freerdp3` 自带凭据窗口（实测 `app-id=com.freerdp.client.sdl3`，标题 `Credentials required for <host>`），且它**不读 stdin**（`/from-stdin` 会因缺 TTY 报 `tcgetattr` 错）。密码改由钥匙串 + `FREERDP_ASKPASS` 供给，见 §14 |
 | **fire-and-forget 启动** | 不做输出解析和错误分类。GUI 常驻，客户端用 `start_new_session=True` 派生 |
 | **文件保持最小** | FreeRDP 加载任何 `.rdp` 都会按 connection type 注入一整套图形/性能默认值，不写的项自然取默认 |
 
@@ -289,8 +291,48 @@ FreeRDP 会忽略这些键，所以可以安全地存在同一个 `.rdp` 里。
 
 | 不做 | 原因 |
 |---|---|
-| 密码对话框 / keyring | `sdl-freerdp3` 自己弹窗，够用了。将来要接 keyring 的话，正确入口是 `FREERDP_ASKPASS`（FreeRDP 官方为 GUI 设计的接口） |
+| 密码对话框 / keyring | `sdl-freerdp3` 自己弹窗，本程序不重复造。密码的钥匙串支持已实现（见 §14），客户端弹窗只是回退路径 |
 | 连接结果的错误分类 | 需要解析客户端 stderr，脆弱且随版本变化。实测过，不值得 |
 | 侧车配置文件 | 自定义键可以直接存在 `.rdp` 里，实测安全 |
 | 托盘图标 | 目标环境（niri）没有系统托盘 |
 | 暗色模式自动跟随 | 得靠桌面 portal 通知 Qt。现在的做法是 QtWidgets 跟随系统 palette（qt6ct / Kvantum），想换深色就在那边换 color scheme；自动跟随仍然不管 |
+
+## 14. 密码与钥匙串
+
+密码存在系统钥匙串（``org.freedesktop.secrets``，GNOME Keyring / KWallet / oo7 都行），
+连接时通过 ``FREERDP_ASKPASS`` 交给 ``sdl-freerdp3``。
+
+**为什么是 `FREERDP_ASKPASS`**（FreeRDP 3.28+ 实测）：SDL 客户端在弹出凭据窗口**之前**会先
+调用 ``freerdp_passphrase_from_env()``（见 ``libfreerdp/utils/passphrase.c``），它执行
+``FREERDP_ASKPASS`` 指向的程序、读其 stdout 第一行当密码，拿到就不再弹窗口。所以：
+
+* 不需要 ``+force-console-callbacks``（那会把证书确认也拉回控制台，而 stdin 是 DEVNULL）
+* 不需要 ``/from-stdin``（缺 TTY 会报 ``tcgetattr``）
+* 密码不进 argv、不进环境变量：helper 只收到「查哪条记录」的属性，密码在 helper 内部从钥匙串取
+
+**数据流**
+
+```
+存:  认证组的「密码」行 ──> secrets.SecretToolBackend.set() ──> 钥匙串
+                       且在 .rdp 里打 gui_save_password:i:1 标记
+连:  connectNow() 若看见标记 ──> launch(secret_attrs=...)
+                             ──> 子进程 env.FREERDP_ASKPASS + SFLGUI_SECRET_ATTRS
+                             ──> sdl-freerdp3 popen(helper) ──> 钥匙串 lookup ──> stdout
+                             （helper 失手则自动回退到 FreeRDP 自带凭据窗）
+```
+
+**约束**
+
+* 密码**绝不**写进 `.rdp`；`.rdp` 里只有 ``gui_save_password`` 这个标记
+* 钥匙串条目按**连接身份** (host/port/username/domain) 索引，不按文件名——重命名/复制不丢
+* 必须有用户名：FreeRDP 那句 ``if (u) return TRUE;`` 意味着只有用户名已在 .rdp 里时
+  才能完全跳过弹窗，否则仍会弹窗要用户名
+* 身份字段（地址/端口/用户名/域）一变，标记就清除；旧钥匙串条目保留，用「全部…」清理
+* **判定钥匙串是否可用不能只看 ``DBUS_SESSION_BUS_ADDRESS``**：``secret-tool`` 底层
+  的 GDBus 在该环境变量缺失时会回退到 ``$XDG_RUNTIME_DIR/bus``。曾经只看环境变量，
+  结果在只有 runtime bus 的会话里把密码行整个禁用、报「系统钥匙串不可用」，而
+  ``secret-tool`` 本身完全正常（已踩）。现在 ``session_bus_available()`` 两者都认
+* `SFLGUI_SECRET_BACKEND=none` 可强制禁用（排查用）
+
+**测试**：``tools/test_core.py`` 用内存 ``FakeSecretBackend``，不碰真实钥匙串；
+``test_askpass_helper`` 用 ``SFLGUI_SECRET_BACKEND=none`` 验证 helper 的退出码契约。

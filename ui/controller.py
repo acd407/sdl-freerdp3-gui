@@ -13,13 +13,16 @@ from typing import Any
 
 from PyQt6.QtCore import QObject, pyqtSignal
 
-from core import extraargs, launch, profiles, schema
-from core.rdpfile import KEY_EXTRA_ARGS, Entry, RdpFile
+from core import extraargs, launch, profiles, schema, secrets
+from core.rdpfile import KEY_EXTRA_ARGS, KEY_SAVE_PASSWORD, Entry, RdpFile
 
 APP_ID = "sdl-freerdp3-gui"
 SECURITY_KEY = "gui_security"
 DRAFT_LABEL = "快速连接"
 DEFAULT_W, DEFAULT_H = 1060, 740
+
+# 改动这些字段会让已存密码对应的「连接身份」失效，于是清掉标记
+IDENTITY_KEYS = frozenset({"full address", "server port", "username", "domain"})
 
 
 class AppController(QObject):
@@ -37,9 +40,11 @@ class AppController(QObject):
     previewChanged = pyqtSignal()
     titleChanged = pyqtSignal()
     statusChanged = pyqtSignal()
+    passwordChanged = pyqtSignal()
 
-    def __init__(self) -> None:
+    def __init__(self, secrets_backend: secrets.SecretBackend | None = None) -> None:
         super().__init__()
+        self._secrets = secrets_backend if secrets_backend is not None else secrets.get_backend()
         self._state = profiles.load_state()
         self._rdp = RdpFile()
         self._source: str | None = None  # None = 草稿
@@ -92,6 +97,20 @@ class AppController(QObject):
     @property
     def binaryHint(self) -> str:
         return str(self._binary).split("/")[-1] if self._binary else "未找到 FreeRDP 客户端"
+
+    @property
+    def passwordSupported(self) -> bool:
+        return self._secrets.available
+
+    @property
+    def passwordSaved(self) -> bool:
+        return self._rdp.has(KEY_SAVE_PASSWORD) and self._rdp.get_bool(KEY_SAVE_PASSWORD, False)
+
+    @property
+    def passwordHint(self) -> str:
+        if not self._secrets.available:
+            return "系统钥匙串不可用"
+        return "已存入系统钥匙串" if self.passwordSaved else "未保存"
 
     @property
     def draftLabel(self) -> str:
@@ -240,6 +259,12 @@ class AppController(QObject):
             # 反过来：手写改了 extra_args，下拉也要跟着走
             self._values[SECURITY_KEY] = extraargs.security_index(str(value or ""))
 
+        # 连接身份变了，之前存的密码不再对应这个地址/用户：清掉标记
+        # （钥匙串里的旧条目先留着，用户可用「清理全部」彻底移除）
+        if key in IDENTITY_KEYS and self._rdp.has(KEY_SAVE_PASSWORD):
+            self._rdp.unset(KEY_SAVE_PASSWORD)
+            self.passwordChanged.emit()
+
         self._mark(True)
         self.valueEdited.emit(key)
         self.previewChanged.emit()
@@ -300,6 +325,55 @@ class AppController(QObject):
         self._set_message(f"已移入回收站: {moved.name}")
         return True
 
+    # ------------------------------------------------------------ 密码
+
+    def _identity(self) -> secrets.Identity:
+        return secrets.identity_from_values(self._values)
+
+    def setPassword(self, password: str) -> bool:
+        """把密码写进系统钥匙串，并在 .rdp 里打标记。"""
+        if not password:
+            return False
+        if not self._secrets.available:
+            self._set_message("系统钥匙串不可用，无法保存密码")
+            return False
+        ident = self._identity()
+        if not ident.is_usable():
+            self._set_message("请先填写服务器地址和用户名，再保存密码")
+            return False
+
+        attrs = secrets.build_attrs(ident)
+        if not self._secrets.set(attrs, password, secrets.label(ident)):
+            self._set_message("写入钥匙串失败")
+            return False
+
+        self._rdp.set(KEY_SAVE_PASSWORD, True)
+        self._mark(True)
+        self.passwordChanged.emit()
+        self._set_message(f"已保存 {ident.username}@{ident.host} 的密码到钥匙串")
+        return True
+
+    def clearPassword(self) -> bool:
+        """删除当前身份在钥匙串里的条目，并去掉标记。"""
+        ident = self._identity()
+        ok = True
+        if self._secrets.available and ident.is_usable():
+            ok = self._secrets.delete(secrets.build_attrs(ident))
+        self._rdp.unset(KEY_SAVE_PASSWORD)
+        self._mark(True)
+        self.passwordChanged.emit()
+        self._set_message("已清除保存的密码" if ok else "已去掉标记，但钥匙串条目删除失败")
+        return ok
+
+    def purgePasswords(self) -> bool:
+        """清掉本程序在钥匙串里保存的全部密码。"""
+        ok = self._secrets.purge() if self._secrets.available else False
+        self._rdp.unset(KEY_SAVE_PASSWORD)
+        self._mark(True)
+        self.passwordChanged.emit()
+        self._set_message("已清理钥匙串中的全部密码" if ok else "钥匙串不可用或清理失败")
+        return ok
+
     def connectNow(self) -> str:
         """写出 .rdp（草稿写运行目录），然后启动客户端。"""
         if not self._values.get("full address", "").strip():
@@ -307,6 +381,12 @@ class AppController(QObject):
             return "no address"
 
         extra = str(self._values.get(KEY_EXTRA_ARGS, "") or "")
+        # 只有在标记存在、后端可用、身份完整时才走钥匙串；否则让 FreeRDP 自己弹窗
+        secret_attrs = None
+        if self.passwordSaved and self._secrets.available:
+            ident = self._identity()
+            if ident.is_usable():
+                secret_attrs = secrets.build_attrs(ident)
         try:
             if self._source is None:
                 path = profiles.write_draft(self._collect())
@@ -317,7 +397,7 @@ class AppController(QObject):
                 path = profiles.path_for(self._source)
                 self._mark(False)
                 self.refresh_profiles()
-            pid = launch.launch(path, extra)
+            pid = launch.launch(path, extra, secret_attrs=secret_attrs)
         except (launch.LaunchError, OSError) as exc:
             self._set_message(f"启动失败: {exc}")
             return str(exc)

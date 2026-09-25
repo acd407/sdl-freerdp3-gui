@@ -3,9 +3,10 @@
 设计要点（全部来自 Phase 0 实测）
 --------------------------------
 * **fire-and-forget**：不监控输出，不做错误分类。GUI 常驻，连接在独立进程里跑。
-* **密码不传**：``sdl-freerdp3`` 自带凭据对话框（实测会出现
-  ``app-id="com.freerdp.client.sdl3"``、标题 ``Credentials required for <host>``
-  的窗口），所以 GUI 不需要实现密码输入。
+* **密码**：默认不传，``sdl-freerdp3`` 自带凭据对话框。若调用方给出
+  ``secret_attrs``（钥匙串条目的属性集合），则设置环境变量 ``FREERDP_ASKPASS``
+  指向 ``core/askpass.py``，让客户端自己从钥匙串取密码（见 core/secrets.py）。
+  密码既不进 argv，也不进环境变量。
 * ``/cert:ignore`` 这类参数**无法写进 .rdp**（FreeRDP 的 100 个键里没有任何证书
   相关键），所以走 ``gui_extra_args`` 自定义键，在这里拼到命令行上。
 * 用 ``setsid`` 派生，让客户端脱离 GUI 的进程组，GUI 退出不影响它。
@@ -13,11 +14,14 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shlex
 import shutil
 import signal
 import subprocess
+import sys
+from collections.abc import Mapping
 from pathlib import Path
 
 # 优先 SDL 客户端（Wayland 下表现最好），其次 wl，最后 x
@@ -48,12 +52,35 @@ def build_command(rdp_path: Path, extra_args: str = "") -> list[str]:
     return cmd
 
 
-def launch(rdp_path: Path, extra_args: str = "") -> int:
-    """启动客户端，立即返回子进程 pid。"""
+def askpass_env(attrs: Mapping[str, str]) -> dict[str, str]:
+    """构造让客户端从钥匙串取密码所需的环境变量。
+
+    FreeRDP 会把 ``FREERDP_ASKPASS`` 的值原样拼进 ``sh -c``（后面再跟一个被单引号
+    包起来的提示语），所以这里用 ``shlex.join`` 生成安全、无单引号冲突的命令。
+    值里只含脚本路径和查询属性，**不含密码**。
+    """
+    python = sys.executable or "python3"
+    script = os.fspath(Path(__file__).resolve().parent / "askpass.py")
+    return {
+        "FREERDP_ASKPASS": shlex.join([python, script]),
+        "SFLGUI_SECRET_ATTRS": json.dumps(dict(attrs), ensure_ascii=False),
+    }
+
+
+def launch(rdp_path: Path, extra_args: str = "", secret_attrs: Mapping[str, str] | None = None) -> int:
+    """启动客户端，立即返回子进程 pid。
+
+    ``secret_attrs`` 非空时，子进程环境里会带上 ``FREERDP_ASKPASS``，客户端会先
+    尝试从钥匙串取密码，失败再回退到自带凭据窗口。
+    """
     if not Path(rdp_path).is_file():
         raise LaunchError(f"找不到配置文件: {rdp_path}")
 
     cmd = build_command(rdp_path, extra_args)
+
+    env: dict[str, str] | None = None
+    if secret_attrs:
+        env = {**os.environ, **askpass_env(secret_attrs)}
 
     # 不要在子进程里继承我们的 stdin/stdout/stderr，
     # 否则客户端的输出会污染 GUI 的终端。
@@ -66,6 +93,7 @@ def launch(rdp_path: Path, extra_args: str = "") -> int:
             stderr=devnull,
             start_new_session=True,  # ≈ setsid，脱离 GUI 的进程组
             close_fds=True,
+            env=env,
         )
     except OSError as exc:  # pragma: no cover
         raise LaunchError(f"启动失败: {exc}") from exc

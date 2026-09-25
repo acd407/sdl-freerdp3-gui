@@ -97,6 +97,13 @@ def main() -> int:
         check(f"控件类型 {fld.key}", want is None or isinstance(row.control, want),
               f"{type(row.control).__name__} 期望 {want.__name__ if want else '?'}")
 
+    # 密码行（钥匙串）已接入
+    check("密码行存在", hasattr(win, "secret_row"))
+    if hasattr(win, "secret_row"):
+        check("密码是掩码输入框", isinstance(win.secret_row.edit, QLineEdit))
+        check("密码框已掩码",
+              win.secret_row.edit.echoMode() == QLineEdit.EchoMode.Password)
+
     # 值同步：controller → 控件
     win._sync_form(force=True)
     address = win._rows["full address"]

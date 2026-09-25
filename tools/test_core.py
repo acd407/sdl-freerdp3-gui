@@ -11,8 +11,10 @@ from __future__ import annotations
 
 import ctypes
 import ctypes.util
+import json
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -31,6 +33,7 @@ os.makedirs(os.environ["XDG_RUNTIME_DIR"], exist_ok=True)
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 
 from core import extraargs, launch, profiles, schema  # noqa: E402
+from core import secrets  # noqa: E402
 from core.rdpfile import RdpFile  # noqa: E402
 
 
@@ -61,6 +64,34 @@ class Report:
 
 
 R = Report()
+
+
+class FakeSecretBackend:
+    """内存钥匙串，供测试用；不接触真实 Secret Service。"""
+
+    name = "fake"
+
+    def __init__(self, available: bool = True) -> None:
+        self.store: dict[tuple, str] = {}
+        self.available = available
+
+    @staticmethod
+    def _key(attrs) -> tuple:
+        return tuple(sorted(attrs.items()))
+
+    def get(self, attrs):
+        return self.store.get(self._key(attrs))
+
+    def set(self, attrs, secret, label):
+        self.store[self._key(attrs)] = secret
+        return True
+
+    def delete(self, attrs):
+        return self.store.pop(self._key(attrs), None) is not None
+
+    def purge(self):
+        self.store.clear()
+        return True
 
 
 # --------------------------------------------------------------- rdpfile
@@ -161,6 +192,66 @@ def test_schema() -> None:
             schema.BY_KEY["audiomode"].absent_value != schema.BY_KEY["audiomode"].default)
 
 
+# --------------------------------------------------------------- secrets
+
+def test_secrets() -> None:
+    R.group("secrets")
+    ident = secrets.identity_from_values(
+        {"full address": "h", "server port": "3390", "username": "u", "domain": ""}
+    )
+    R.eq("端口转 int", ident.port, 3390)
+    attrs = secrets.build_attrs(ident)
+    R.eq("空域归一成 -", attrs["domain"], "-")
+    R.eq("application 属性", attrs["application"], secrets.APP_ATTR)
+    R.eq("属性稳定",
+         secrets.build_attrs(secrets.identity_from_values(
+             {"full address": "h", "server port": 3390, "username": "u"})),
+         attrs)
+    R.check("不同身份属性不同",
+            secrets.build_attrs(secrets.Identity("h", 3390, "v")) != attrs)
+    R.check("缺用户名视为不可用",
+            not secrets.identity_from_values({"full address": "h"}).is_usable())
+    R.check("地址+用户名可用", ident.is_usable())
+
+    # 会话总线的判定：DBUS 环境变量缺失时，$XDG_RUNTIME_DIR/bus 仍算可用
+    # （secret-tool 的 GDBus 会回退到它；曾经漏判导致钥匙串被误报为不可用）
+    with tempfile.TemporaryDirectory() as runtime:
+        empty = {"XDG_RUNTIME_DIR": runtime}
+        R.check("没有环境变量也没有 bus socket 时不可用",
+                not secrets.session_bus_available(empty))
+        bus = os.path.join(runtime, "bus")
+        with open(bus, "w"):
+            pass
+        R.check("只有 $XDG_RUNTIME_DIR/bus 时可用",
+                secrets.session_bus_available(empty))
+    R.check("有 DBUS_SESSION_BUS_ADDRESS 时可用",
+            secrets.session_bus_available({"DBUS_SESSION_BUS_ADDRESS": "unix:path=/x"}))
+    R.check("只有环境变量、socket 不存在也算可用",
+            secrets.session_bus_available(
+                {"DBUS_SESSION_BUS_ADDRESS": "unix:path=/x", "XDG_RUNTIME_DIR": "/nope"}))
+
+
+# --------------------------------------------------------------- askpass
+
+def test_askpass_helper() -> None:
+    R.group("askpass helper")
+    script = ROOT / "core" / "askpass.py"
+    base_env = {**os.environ, "SFLGUI_SECRET_BACKEND": "none"}
+
+    r = subprocess.run([sys.executable, str(script)], capture_output=True, env=base_env)
+    R.eq("无 attrs 时退出 1", r.returncode, 1)
+    R.eq("无 attrs 时无输出", r.stdout, b"")
+
+    env2 = {**base_env, "SFLGUI_SECRET_ATTRS": '{"application": "x"}'}
+    r2 = subprocess.run([sys.executable, str(script)], capture_output=True, env=env2)
+    R.eq("后端不可用时退出 1", r2.returncode, 1)
+    R.eq("后端不可用时无输出", r2.stdout, b"")
+
+    env3 = {**base_env, "SFLGUI_SECRET_ATTRS": "not-json"}
+    r3 = subprocess.run([sys.executable, str(script)], capture_output=True, env=env3)
+    R.eq("坏 JSON 退出 1", r3.returncode, 1)
+
+
 # --------------------------------------------------------------- AppController
 
 def test_controller() -> None:
@@ -227,6 +318,70 @@ def test_launch() -> None:
     cmd2 = launch.build_command(Path("/tmp/x.rdp"), '/drive:"My Docs,/home/u/My Docs"')
     R.check("引号内的空格不被拆分", len(cmd2) == 3, f"实际 {cmd2}")
 
+    # 钥匙串注入：只放 helper 路径和属性，绝不放密码
+    attrs = {"application": "x", "host": "h", "username": "u"}
+    env = launch.askpass_env(attrs)
+    R.check("设置 FREERDP_ASKPASS", "askpass.py" in env["FREERDP_ASKPASS"])
+    R.eq("属性以 JSON 传入", json.loads(env["SFLGUI_SECRET_ATTRS"]), attrs)
+    R.check("环境里不含密码", "s3cr3t" not in json.dumps(env))
+
+
+def test_password() -> None:
+    R.group("密码 / 钥匙串")
+    from PyQt6.QtWidgets import QApplication
+    from ui.controller import AppController
+    from core.rdpfile import KEY_SAVE_PASSWORD
+
+    _ = QApplication.instance() or QApplication([])
+    profiles.ensure_dirs()
+
+    fake = FakeSecretBackend()
+    c = AppController(secrets_backend=fake)
+    c.setField("full address", "10.2.3.4")
+    c.setField("username", "alice")
+    R.check("后端可用", c.passwordSupported)
+    R.check("初始未保存", not c.passwordSaved)
+
+    R.check("保存密码成功", c.setPassword("s3cr3t"))
+    R.check("标记已置", c.passwordSaved)
+    attrs = secrets.build_attrs(secrets.identity_from_values(
+        {"full address": "10.2.3.4", "server port": 3389, "username": "alice"}))
+    R.eq("钥匙串里有密码", fake.get(attrs), "s3cr3t")
+    R.check("标记写入 .rdp", c._collect().get_bool(KEY_SAVE_PASSWORD, False))
+    R.check("标记可往返", "gui_save_password" in c.previewText)
+
+    # 改动连接身份 → 标记清除（旧条目保留，等待用户清理）
+    c.setField("full address", "10.2.3.5")
+    R.check("改地址后标记清除", not c.passwordSaved)
+    R.eq("旧条目仍在", fake.get(attrs), "s3cr3t")
+    c.setField("full address", "10.2.3.4")
+    R.check("改回地址不会自动恢复标记", not c.passwordSaved)
+
+    # 清除
+    c.setPassword("s3cr3t")
+    R.check("清除成功", c.clearPassword())
+    R.check("清除后条目消失", fake.get(attrs) is None)
+    R.check("清除后标记消失", not c.passwordSaved)
+
+    # 全部清理
+    c.setPassword("a")
+    c.setField("username", "bob")
+    c.setPassword("b")
+    R.check("清理全部成功", c.purgePasswords())
+    R.eq("清理后钥匙串为空", len(fake.store), 0)
+
+    # 后端不可用时安全降级
+    dead = AppController(secrets_backend=FakeSecretBackend(available=False))
+    dead.setField("full address", "h")
+    dead.setField("username", "u")
+    R.check("不可用时不显示支持", not dead.passwordSupported)
+    R.check("不可用时保存被拒", not dead.setPassword("x"))
+
+    # 缺用户名时保留密码
+    nom = AppController(secrets_backend=FakeSecretBackend())
+    nom.setField("full address", "h")
+    R.check("缺用户名时保存被拒", not nom.setPassword("x"))
+
 
 def main() -> int:
     try:
@@ -234,7 +389,10 @@ def main() -> int:
         test_extraargs()
         test_profiles()
         test_schema()
+        test_secrets()
+        test_askpass_helper()
         test_controller()
+        test_password()
         test_launch()
     finally:
         shutil.rmtree(_TMP, ignore_errors=True)

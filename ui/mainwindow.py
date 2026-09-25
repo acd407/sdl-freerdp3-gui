@@ -34,7 +34,7 @@ from PyQt6.QtWidgets import (
 
 from core import schema
 from ui.controller import AppController
-from ui.fields import CollapsibleSection, FieldRow
+from ui.fields import CollapsibleSection, FieldRow, SecretRow
 
 _DRAFT_ROLE = Qt.ItemDataRole.UserRole
 _SUBTITLE_ROLE = Qt.ItemDataRole.UserRole + 1
@@ -117,6 +117,7 @@ class MainWindow(QMainWindow):
         self._connect_controller()
         self._rebuild_list()
         self._sync_form(force=True)
+        self._sync_password()
         self._sync_preview()
         self._update_title()
         self._update_buttons()
@@ -167,6 +168,13 @@ class MainWindow(QMainWindow):
         # 分组表单
         for group in schema.GROUPS:
             section = CollapsibleSection(group.title, opened=group.open_by_default)
+            if group.id == "auth":
+                # 密码不是 schema 字段（不进 .rdp），单独插在「认证」组最上面
+                self.secret_row = SecretRow()
+                self.secret_row.setRequested.connect(self._on_password_set)
+                self.secret_row.clearRequested.connect(self.c.clearPassword)
+                self.secret_row.purgeRequested.connect(self._on_password_purge)
+                section.add(self.secret_row)
             for fld in group.fields:
                 row = FieldRow(fld)
                 row.changed.connect(self._on_field_changed)
@@ -231,10 +239,12 @@ class MainWindow(QMainWindow):
         self.c.profilesChanged.connect(self._rebuild_list)
         self.c.reloaded.connect(lambda: self._sync_form(force=True))
         self.c.reloaded.connect(self._sync_preview)
+        self.c.reloaded.connect(self._sync_password)
         self.c.valueEdited.connect(lambda _key: self._sync_form())
         self.c.previewChanged.connect(self._sync_preview)
         self.c.titleChanged.connect(self._on_title_changed)
         self.c.statusChanged.connect(self._sync_status)
+        self.c.passwordChanged.connect(self._sync_password)
 
     # ------------------------------------------------------------ 刷新
 
@@ -275,6 +285,11 @@ class MainWindow(QMainWindow):
     def _sync_status(self) -> None:
         self.status_label.setText(self.c.status)
 
+    def _sync_password(self) -> None:
+        row = getattr(self, "secret_row", None)
+        if row is not None:
+            row.set_state(self.c.passwordSupported, self.c.passwordSaved, self.c.passwordHint)
+
     def _update_title(self) -> None:
         suffix = " •" if self.c.dirty else ""
         self.setWindowTitle(f"sdl-freerdp3 配置 — {self.c.title}{suffix}")
@@ -309,6 +324,20 @@ class MainWindow(QMainWindow):
 
     def _on_field_changed(self, key: str, value) -> None:
         self.c.setField(key, value)
+
+    def _on_password_set(self, password: str) -> None:
+        if self.c.setPassword(password):
+            self.secret_row.clear_input()
+
+    def _on_password_purge(self) -> None:
+        answer = QMessageBox.question(
+            self,
+            "清理钥匙串",
+            "清除本程序在系统钥匙串里保存的所有 RDP 密码？\n\n"
+            "这只影响钥匙串条目，配置文件本身不受影响。",
+        )
+        if answer == QMessageBox.StandardButton.Yes:
+            self.c.purgePasswords()
 
     def _on_save(self) -> None:
         if self.c.isDraft:

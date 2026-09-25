@@ -84,10 +84,21 @@ Kvantum 对它是像素级无效的——这就是后来换成 QtWidgets 的原�
 
 ### 密码
 
-**本程序不弹密码框。** `sdl-freerdp3` 自己会弹（标题 `Credentials required for <主机>`），
-所以密码不经过本程序，也不会落盘。
+密码可以存在**系统钥匙串**（Secret Service：GNOME Keyring / KWallet / oo7 均可），
+连接时自动填入，不用每次手输。
 
-如果那个窗口被平铺合成器当成普通窗口处理，见下面的 niri 一节。
+* 在「认证」组最上面那行填密码，点「保存」。
+* 密码**不会**写进 `.rdp`，也不会出现在命令行或进程列表里——只会写入系统钥匙串。
+  连接时由 `sdl-freerdp3` 自己通过 `FREERDP_ASKPASS` 去取。
+* 「清除」删掉当前服务器的密码；「全部…」清掉本程序在钥匙串里保存的所有密码。
+* 需要填**用户名**才能保存：只有用户名已知时，FreeRDP 才能跳过它自己的密码窗口。
+* 改了服务器地址 / 端口 / 用户名 / 域，已存密码的标记会自动取消（避免把旧密码发给新地址）。
+* 钥匙串不可用时，这一行会变灰，一切照旧（连接时弹 FreeRDP 自带的凭据窗，
+  标题 `Credentials required for <主机>`）。
+
+> 想临时禁用钥匙串（排查连接问题时）：`SFLGUI_SECRET_BACKEND=none ./sdl-freerdp3-gui`。
+
+如果 FreeRDP 自带的凭据窗被平铺合成器当成普通窗口处理，见下面的 niri 一节。
 
 ## 数据位置
 
@@ -98,7 +109,9 @@ Kvantum 对它是像素级无效的——这就是后来换成 QtWidgets 的原�
 └── config.json           窗口尺寸等界面状态
 ```
 
-快速连接的草稿写在 `$XDG_RUNTIME_DIR/sdl-freerdp3-gui/quick.rdp`，不污染配置目录。
+密码不在上面这些文件里：已保存的密码存在**系统钥匙串**中，条目标签形如
+`RDP 用户名@主机:端口`。快速连接的草稿写在 `$XDG_RUNTIME_DIR/sdl-freerdp3-gui/quick.rdp`，
+不污染配置目录。
 
 配置文件的属性是 `0600`（只有你自己可读）。
 

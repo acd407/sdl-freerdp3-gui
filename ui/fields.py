@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QPushButton,
     QSizePolicy,
     QSpinBox,
     QVBoxLayout,
@@ -183,3 +184,71 @@ class CollapsibleSection(QGroupBox):
 
     def add(self, widget: QWidget) -> None:
         self.body_layout.addWidget(widget)
+
+
+class SecretRow(QWidget):
+    """密码行：输入密码 + 保存 / 清除。
+
+    这不是 schema 字段：密码不进 .rdp，只进系统钥匙串（见 core/secrets.py）。
+    本控件只负责收集与展示，读写钥匙串和 ``gui_`` 标记都在 AppController。
+    """
+
+    setRequested = pyqtSignal(str)
+    clearRequested = pyqtSignal()
+    purgeRequested = pyqtSignal()
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(10)
+
+        label = QLabel("密码")
+        label.setFixedWidth(LABEL_WIDTH)
+        label.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        label.setToolTip(
+            "保存到系统钥匙串（Secret Service），连接时自动填入。\n"
+            "密码不会写进 .rdp，也不会出现在命令行（走 FREERDP_ASKPASS）。"
+        )
+        lay.addWidget(label, 0, Qt.AlignmentFlag.AlignTop)
+
+        self.edit = QLineEdit()
+        self.edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self.edit.setClearButtonEnabled(True)
+        self.edit.setPlaceholderText("输入密码后点「保存」…")
+        self.edit.returnPressed.connect(self._emit_set)
+        lay.addWidget(self.edit, 1)
+
+        self.btn_save = QPushButton("保存")
+        self.btn_save.clicked.connect(self._emit_set)
+        lay.addWidget(self.btn_save, 0)
+
+        self.btn_clear = QPushButton("清除")
+        self.btn_clear.clicked.connect(self.clearRequested.emit)
+        lay.addWidget(self.btn_clear, 0)
+
+        self.btn_purge = QPushButton("全部…")
+        self.btn_purge.setToolTip("清除本程序在系统钥匙串里保存的所有密码")
+        self.btn_purge.clicked.connect(self.purgeRequested.emit)
+        lay.addWidget(self.btn_purge, 0)
+
+        self.status = QLabel()
+        self.status.setEnabled(False)
+        self.status.setMinimumWidth(90)
+        lay.addWidget(self.status, 0)
+
+    def _emit_set(self) -> None:
+        pw = self.edit.text()
+        if pw:
+            self.setRequested.emit(pw)
+
+    def clear_input(self) -> None:
+        self.edit.clear()
+
+    def set_state(self, supported: bool, saved: bool, hint: str = "") -> None:
+        self.edit.setEnabled(supported)
+        self.btn_save.setEnabled(supported)
+        self.btn_clear.setEnabled(supported and saved)
+        self.btn_purge.setEnabled(supported)
+        self.status.setText(hint)

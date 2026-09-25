@@ -41,6 +41,10 @@ GUI_PREFIX = "gui_"
 # 本项目存放「额外命令行参数」的自定义键
 KEY_EXTRA_ARGS = "gui_extra_args"
 
+# 本项目记录「该配置的密码已存入系统钥匙串」的标记键。
+# 密码本体在钥匙串里，这个标记只负责让 GUI 知道要不要设 FREERDP_ASKPASS。
+KEY_SAVE_PASSWORD = "gui_save_password"
+
 
 class RdpParseError(ValueError):
     """文件存在但无法解析。"""
