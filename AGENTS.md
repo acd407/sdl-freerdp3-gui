@@ -44,7 +44,6 @@ FreeRDP 3 的图形化连接管理器：**`.rdp` 配置编辑器 + 启动器**�
 │   ├── controller.py     状态 + 业务操作，只发信号、不碰 widget
 │   ├── fields.py         schema → 控件（FieldRow / CollapsibleSection）
 │   └── mainwindow.py     List-Detail 主界面
-├── research/             探索阶段的实测证据，不参与运行时
 └── tools/                开发与验证，不参与运行时
 ```
 
@@ -103,6 +102,12 @@ selectProfile(name)                       newDraft()
 | **GUI 不实现密码对话框** | `sdl-freerdp3` 自带凭据窗口（实测 `app-id=com.freerdp.client.sdl3`，标题 `Credentials required for <host>`），且它**不读 stdin**（`/from-stdin` 会因缺 TTY 报 `tcgetattr` 错） |
 | **fire-and-forget 启动** | 不做输出解析和错误分类。GUI 常驻，客户端用 `start_new_session=True` 派生 |
 | **文件保持最小** | FreeRDP 加载任何 `.rdp` 都会按 connection type 注入一整套图形/性能默认值，不写的项自然取默认 |
+
+> 表中结论的**原始探针材料**（FreeRDP 源码快照、逐键 A/B 的 `.rdp`、settings dump）
+> 曾经放在 `research/`，现已从工作区清掉——需要时在 git 历史里拿：
+> `git show 7cf1972 --stat` 查看清单，`git show 7cf1972:research/cmdline.c > /tmp/cmdline.c`
+> 取单个文件。要**复现**结论请跑 `tools/genschema.py` / `tools/audit_defaults.py`，
+> 它们才是会持续维护的部分。
 
 ### 死键（不要加进 schema）
 
@@ -166,8 +171,8 @@ selectProfile(name)                       newDraft()
 前几行说明 `.rdp` 键和命令行开关**是等效的**（走同一批 setting）。
 只有 `/sec:tls` 额外关掉 `RdpSecurity`，而 **`.rdp` 里没有任何键能控制 `RdpSecurity`**。
 
-另外记录一个顺序事实（`cmdline.c`）：**先加载 `.rdp`，再解析命令行**，
-所以命令行总是后者优先。
+另外记录一个顺序事实（FreeRDP `cmdline.c`，原始快照见 git 历史 commit `7cf1972`）：
+**先加载 `.rdp`，再解析命令行**，所以命令行总是后者优先。
 
 ## 9. 为什么是 QtWidgets，而不是 QtQuick
 

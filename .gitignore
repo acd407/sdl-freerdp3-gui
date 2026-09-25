@@ -9,7 +9,3 @@ __pycache__/
 tools/probe
 tools/_probe_tmp.rdp
 tools/_audit.rdp
-
-# research/ 里的早期探针二进制同样是构建产物
-research/probe
-research/probe2
