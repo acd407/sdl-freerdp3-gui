@@ -43,7 +43,7 @@ from PyQt6.QtWidgets import (  # noqa: E402
 
 from core import profiles, schema  # noqa: E402
 from ui.controller import AppController  # noqa: E402
-from ui.fields import FieldRow  # noqa: E402
+from ui.fields import CollapsibleSection, FieldRow  # noqa: E402
 from ui.mainwindow import MainWindow  # noqa: E402
 
 _WARNINGS: list[str] = []
@@ -137,6 +137,19 @@ def main() -> int:
     if "full address" in visible:
         label = visible["full address"].layout().itemAt(0).widget()
         check("标签列宽固定", label.width() == 190, str(label.width()))
+
+    # 折叠分组：有主题原生箭头，且展开/收起真的切换
+    sections = win.findChildren(CollapsibleSection)
+    check("折叠分组数量", len(sections) >= len(schema.GROUPS) + 2, str(len(sections)))
+    if sections:
+        sec = sections[1]  # [0] 是「名称」，[1] 起是 schema 分组
+        check("折叠箭头非空", not sec._toggle.icon().isNull())
+        sec._toggle.setChecked(False)
+        app.processEvents()
+        check("收起后内容隐藏", not sec.body.isVisible())
+        sec._toggle.setChecked(True)
+        app.processEvents()
+        check("再次展开后内容可见", sec.body.isVisible())
 
     win.close()
     app.processEvents()

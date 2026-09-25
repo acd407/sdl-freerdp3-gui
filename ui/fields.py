@@ -9,7 +9,7 @@
 
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import QEvent, QSize, Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QSizePolicy,
     QSpinBox,
+    QStyle,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -152,7 +153,16 @@ class FieldRow(QWidget):
 
 
 class CollapsibleSection(QFrame):
-    """可折叠分组：标题按钮 + 内容区。对应原 QML 里点标题展开/收起。"""
+    """可折叠分组：加粗标题 + 主题原生的折叠箭头，整行可点。
+
+    箭头用 `QStyle.standardIcon(SP_ArrowDown/Right)`，而不是
+    `QToolButton.setArrowType()`：前者由当前 QStyle（Kvantum / Fusion / …）
+    绘制，颜色随主题（深色主题下不会糊在背景里）；后者是 Qt 内绘的小三角。
+    样式在运行时被换掉时（`StyleChange`）重新取一次图标。
+    """
+
+    _ARROW_OPEN = QStyle.StandardPixmap.SP_ArrowDown
+    _ARROW_CLOSED = QStyle.StandardPixmap.SP_ArrowRight
 
     def __init__(self, title: str, opened: bool = True, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -168,10 +178,12 @@ class CollapsibleSection(QFrame):
         self._toggle.setChecked(opened)
         self._toggle.setAutoRaise(True)
         self._toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self._toggle.setArrowType(
-            Qt.ArrowType.DownArrow if opened else Qt.ArrowType.RightArrow
-        )
+        self._toggle.setIconSize(QSize(14, 14))
         self._toggle.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self._toggle.setMinimumHeight(26)
+        font = self._toggle.font()
+        font.setBold(True)
+        self._toggle.setFont(font)
         self._toggle.toggled.connect(self._on_toggled)
         outer.addWidget(self._toggle)
 
@@ -182,11 +194,20 @@ class CollapsibleSection(QFrame):
         self.body_layout.setSpacing(6)
         outer.addWidget(self.body)
 
+        self._sync_arrow()
+
     def _on_toggled(self, opened: bool) -> None:
-        self._toggle.setArrowType(
-            Qt.ArrowType.DownArrow if opened else Qt.ArrowType.RightArrow
-        )
+        self._sync_arrow()
         self.body.setVisible(opened)
+
+    def _sync_arrow(self) -> None:
+        pm = self._ARROW_OPEN if self._toggle.isChecked() else self._ARROW_CLOSED
+        self._toggle.setIcon(self.style().standardIcon(pm))
+
+    def changeEvent(self, event) -> None:  # noqa: N802 (Qt 命名)
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.StyleChange:
+            self._sync_arrow()
 
     def add(self, widget: QWidget) -> None:
         self.body_layout.addWidget(widget)
