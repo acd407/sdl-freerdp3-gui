@@ -20,6 +20,17 @@ tools/check --quick      # 跳过较慢的默认值审计（约 4 秒）
 在重建列表时误触发选择……这些都会先抛 Qt 警告；**0 警告 + 显式字段数断言**能盖住
 纯看控件个数漏掉的形态。
 
+## 设计对照
+
+| 文件 | 作用 |
+|---|---|
+| **`demo_sections.py`** | 分组 / 折叠控件的视觉对照 demo：同一份示例内容塞进 9 种实现，右上角可实时切 `QStyle`（Kvantum / Fusion / 桌面主题）。纯给人看的，不参与运行时 |
+
+```bash
+python3 tools/demo_sections.py
+DEMO_SMOKE_TEST=600 QT_QPA_PLATFORM=offscreen python3 tools/demo_sections.py   # 冒烟
+```
+
 ## 代码生成
 
 | 文件 | 作用 |

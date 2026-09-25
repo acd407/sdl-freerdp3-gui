@@ -202,6 +202,12 @@ selectProfile(name)                       newDraft()
 > `required property`、`ScrollView` 没有 `boundsBehavior`、`Layout.preferredWidth`
 > 会当最小宽度用……）已随 `ui/*.qml` 一起删除，需要时看 git 历史。
 
+### 分组 / 折叠控件长什么样
+
+拿不准某种折叠头好不好看时，跑 `python3 tools/demo_sections.py`：
+它把同一份内容塞进九种实现（QToolButton、QGroupBox、QTreeWidget、QToolBox、
+disclosure 风……）并排展示，右上角还能实时切 `QStyle` 和主题（Kvantum / Fusion）。
+
 ## 10. 检查与代码生成
 
 ```bash
