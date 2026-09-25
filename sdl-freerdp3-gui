@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# sdl-freerdp3-gui 启动器
+set -euo pipefail
+
+SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+DIR="$(dirname "$SELF")"
+
+# Wayland 优先，回退 X11
+export QT_QUICK_CONTROLS_STYLE="${QT_QUICK_CONTROLS_STYLE:-Fusion}"
+export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-wayland;xcb}"
+
+exec python3 "$DIR/app.py" "$@"

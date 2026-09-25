@@ -1,0 +1,100 @@
+selectedmonitors
+winposstr
+devicestoredirect
+drivestoredirect
+kdcproxyname
+endpointfedauth
+gatewayaccesstoken
+activityhint
+hubdiscoverygeourl
+diagnosticserviceurl
+aadtenantid
+armpath
+wvd endpoint pool
+resourceprovider
+gatewayhostname
+shell working directory
+alternate shell
+remoteapplicationcmdline
+remoteapplicationguid
+remoteapplicationfile
+remoteapplicationprogram
+remoteapplicationicon
+remoteapplicationname
+loadbalanceinfo
+camerastoredirect
+usbdevicestoredirect
+alternate full address
+full address
+password
+domain
+username
+redirectwebauthn
+rdgiskdcproxy
+use redirection server name
+gatewaycredentialssource
+gatewayprofileusagemethod
+gatewayusagemethod
+disableremoteappcapscheck
+disableconnectionsharing
+remoteapplicationexpandworkingdir
+remoteapplicationexpandcmdline
+remoteapplicationmode
+enablerdsaadauth
+enablecredsspsupport
+negotiate security layer
+prompt for credentials
+promptcredentialonce
+authentication level
+public mode
+autoreconnect max retries
+autoreconnection enabled
+administrative session
+connect to console
+disableclipboardredirection
+disableprinterredirection
+redirectdirectx
+redirectposdevices
+redirectclipboard
+redirectsmartcards
+redirectlocation
+redirectcomports
+redirectprinters
+redirectdrives
+server port
+bitmapcachepersistenable
+bitmapcachesize
+disable cursor setting
+disable themes
+disable menu anims
+disable full window drag
+allow desktop composition
+allow font smoothing
+disable wallpaper
+enableworkspacereconnect
+workspaceid
+displayconnectionbar
+pinconnectionbar
+bandwidthautodetect
+networkautodetect
+connection type
+videoplaybackmode
+redirected video capture encoding quality
+encode redirected video capture
+audiocapturemode
+audioqualitymode
+audiomode
+disable ctrl+alt+del
+keyboardhook
+compression
+desktopscalefactor
+session bpp
+desktop size id
+desktopheight
+desktopwidth
+superpanaccelerationfactor
+enablesuperpan
+dynamic resolution
+smart sizing
+span monitors
+screen mode id

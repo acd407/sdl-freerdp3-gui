@@ -1,0 +1,144 @@
+Window ID 11:
+  Title: "Mozilla Firefox"
+  App ID: "firefox"
+  Is floating: no
+  PID: 148445
+  Workspace ID: 2
+  Layout:
+    Tile size: 1920 x 1052
+    Scrolling position: column 1, tile 1
+    Window size: 1920 x 1052
+    Window offset in tile: 0 x 0
+
+Window ID 263:
+  Title: "[未命名] + (~) - Nvim"
+  App ID: "footclient"
+  Is floating: no
+  PID: 139272
+  Workspace ID: 13
+  Layout:
+    Tile size: 1410 x 911.88
+    Scrolling position: column 1, tile 1
+    Window size: 1410 x 912
+    Window offset in tile: 0 x 0
+
+Window ID 264:
+  Title: "[stu-PowerE] ~/worker"
+  App ID: "footclient"
+  Is floating: no
+  PID: 139272
+  Workspace ID: 17
+  Layout:
+    Tile size: 1410 x 911.88
+    Scrolling position: column 1, tile 1
+    Window size: 1410 x 912
+    Window offset in tile: 0 x 0
+
+Window ID 265:
+  Title: "[未命名] + (~) - Nvim"
+  App ID: "footclient"
+  Is floating: no
+  PID: 139272
+  Workspace ID: 17
+  Layout:
+    Tile size: 690 x 891.88
+    Scrolling position: column 2, tile 1
+    Window size: 690 x 892
+    Window offset in tile: 0 x 0
+
+Window ID 294:
+  Title: "~"
+  App ID: "footclient"
+  Is floating: no
+  PID: 139272
+  Workspace ID: 2
+  Layout:
+    Tile size: 945 x 1032
+    Scrolling position: column 4, tile 1
+    Window size: 945 x 1032
+    Window offset in tile: 0 x 0
+
+Window ID 295:
+  Title: "QQ"
+  App ID: "QQ"
+  Is floating: no
+  PID: 227789
+  Workspace ID: 2
+  Layout:
+    Tile size: 945 x 1032
+    Scrolling position: column 5, tile 1
+    Window size: 945 x 1032
+    Window offset in tile: 0 x 0
+
+Window ID 297:
+  Title: "π - gym-pybullet-drones"
+  App ID: "footclient"
+  Is floating: no
+  PID: 139272
+  Workspace ID: 29
+  Layout:
+    Tile size: 1410 x 911.88
+    Scrolling position: column 1, tile 1
+    Window size: 1410 x 912
+    Window offset in tile: 0 x 0
+
+Window ID 306:
+  Title: "xfreerdp-gui (~/dotfiles/links/.bin) - Nvim"
+  App ID: "footclient"
+  Is floating: no
+  PID: 139272
+  Workspace ID: 34
+  Layout:
+    Tile size: 1410 x 911.88
+    Scrolling position: column 1, tile 1
+    Window size: 1410 x 912
+    Window offset in tile: 0 x 0
+
+Window ID 337:
+  Title: "Looking Glass (client)"
+  App ID: "looking-glass-client"
+  Is floating: no
+  PID: 442429
+  Workspace ID: 35
+  Layout:
+    Tile size: 1410 x 911.88
+    Scrolling position: column 1, tile 1
+    Window size: 1410 x 912
+    Window offset in tile: 0 x 0
+
+Window ID 365:
+  Title: "π - freerdp-gui"
+  App ID: "footclient"
+  Is floating: no
+  PID: 139272
+  Workspace ID: 34
+  Layout:
+    Tile size: 1410 x 911.88
+    Scrolling position: column 2, tile 1
+    Window size: 1410 x 912
+    Window offset in tile: 0 x 0
+
+Window ID 367:
+  Title: "PiliPlus"
+  App ID: "com.example.piliplus"
+  Is floating: no
+  PID: 450370
+  Workspace ID: 2
+  Layout:
+    Tile size: 1920 x 1052
+    Scrolling position: column 2, tile 1
+    Window size: 1920 x 1052
+    Window offset in tile: 0 x 0
+
+Window ID 369: (focused)
+  Title: "Credentials required for 127.0.0.1"
+  App ID: "com.freerdp.client.sdl3"
+  Is floating: no
+  PID: 452177
+  Workspace ID: 2
+  Layout:
+    Tile size: 600 x 220
+    Scrolling position: column 3, tile 1
+    Window size: 600 x 220
+    Window offset in tile: 0 x 0
+

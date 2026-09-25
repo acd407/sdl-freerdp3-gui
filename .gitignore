@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+
+# pi 的本地任务 / 会话产物
+.pi/
+
+# 探针是构建产物，probeutil.py 会自动重编
+tools/probe
+tools/_probe_tmp.rdp
+tools/_audit.rdp
+
+# research/ 里的早期探针二进制同样是构建产物
+research/probe
+research/probe2

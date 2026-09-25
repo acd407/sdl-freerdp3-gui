@@ -1,0 +1,20 @@
+Window ID 11:
+  Title: "Mozilla Firefox"
+  App ID: "firefox"
+Window ID 263:
+  Title: "[未命名] + (~) - Nvim"
+  App ID: "footclient"
+Window ID 264:
+  Title: "[stu-PowerE] ~/worker"
+  App ID: "footclient"
+Window ID 265:
+  Title: "[未命名] + (~) - Nvim"
+  App ID: "footclient"
+Window ID 294:
+  Title: "~"
+  App ID: "footclient"
+Window ID 295:
+  Title: "QQ"
+  App ID: "QQ"
+Window ID 297:
+  Title: "π - gym-pybullet-drones"

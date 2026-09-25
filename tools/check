@@ -1,0 +1,55 @@
+#!/usr/bin/env python3
+"""一键跑全部检查。
+
+用法:
+    tools/check            # 全部
+    tools/check --quick    # 跳过较慢的默认值审计（约 4 秒）
+"""
+
+from __future__ import annotations
+
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+
+CHECKS = [
+    ("核心层测试", HERE / "test_core.py", "单元测试：rdpfile / extraargs / profiles / schema / Bridge / launch"),
+    ("QML 加载", HERE / "check_qml.py", "无头加载 Main.qml，断言 0 条 QML 警告"),
+    ("默认值审计", HERE / "audit_defaults.py", "逐个字段验证「省略键」等价于「写入默认值」（调用 FreeRDP 探针，较慢）"),
+]
+SLOW = {"默认值审计"}
+
+
+def main() -> int:
+    quick = "--quick" in sys.argv[1:]
+    results: list[tuple[str, bool, float]] = []
+
+    for name, script, desc in CHECKS:
+        if quick and name in SLOW:
+            print(f"\n\033[2m跳过 {name}（--quick）\033[0m")
+            continue
+        print(f"\n\033[1m{'=' * 62}\033[0m")
+        print(f"\033[1m{name}\033[0m — {desc}")
+        print(f"\033[1m{'=' * 62}\033[0m")
+        t0 = time.time()
+        proc = subprocess.run([sys.executable, str(script)])
+        results.append((name, proc.returncode == 0, time.time() - t0))
+
+    print(f"\n\033[1m{'=' * 62}\033[0m")
+    print("\033[1m汇总\033[0m")
+    for name, ok, dt in results:
+        color = "32" if ok else "31"
+        print(f"  \033[{color}m{'通过' if ok else '失败'}\033[0m  {name:14s} {dt:5.1f}s")
+    failed = [n for n, ok, _ in results if not ok]
+    if failed:
+        print(f"\n\033[31m失败: {', '.join(failed)}\033[0m")
+        return 1
+    print("\n\033[32m全部通过 ✓\033[0m")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
