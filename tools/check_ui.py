@@ -143,11 +143,11 @@ def main() -> int:
     check("折叠分组数量", len(sections) >= len(schema.GROUPS) + 2, str(len(sections)))
     if sections:
         sec = sections[1]  # [0] 是「名称」，[1] 起是 schema 分组
-        check("折叠箭头非空", not sec._toggle.icon().isNull())
-        sec._toggle.setChecked(False)
+        check("分组可勾选折叠", sec.isCheckable())
+        sec.setChecked(False)
         app.processEvents()
         check("收起后内容隐藏", not sec.body.isVisible())
-        sec._toggle.setChecked(True)
+        sec.setChecked(True)
         app.processEvents()
         check("再次展开后内容可见", sec.body.isVisible())
 

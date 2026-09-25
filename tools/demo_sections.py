@@ -15,10 +15,6 @@ from __future__ import annotations
 
 import os
 import sys
-from pathlib import Path
-
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
 
 from PyQt6.QtCore import QEvent, QSize, Qt, QTimer  # noqa: E402
 from PyQt6.QtWidgets import (  # noqa: E402
@@ -44,15 +40,11 @@ from PyQt6.QtWidgets import (  # noqa: E402
     QWidget,
 )
 
-from ui.fields import CollapsibleSection  # noqa: E402  (应用当前用的实现)
-
-
-# --------------------------------------------------------------- 通用零件
 
 class ArrowToolButton(QToolButton):
-    """主题原生箭头 + 加粗标题的折叠头。
+    """主题原生箭头 + 加粗标题的折叠头（备选方案，应用里现在用的是 QGroupBox）。
 
-    应用里的正式实现是 `ui/fields.CollapsibleSection`；这里抽出来给几个变体复用。
+    抽出来给几个变体复用。
     """
 
     def __init__(self, text: str, opened: bool = True, bold: bool = True, parent=None):
@@ -153,10 +145,15 @@ def variant_old_arrow() -> QWidget:
 
 
 def variant_themed_toolbutton() -> QWidget:
-    """② 应用现在用的：主题原生箭头 + 加粗标题。"""
-    sec = CollapsibleSection("连接", opened=True)
-    sec.add(sample_body())
-    return sec
+    """② 备选：主题原生箭头 + 加粗标题的 QToolButton。"""
+    box, lay = _panel()
+    head = ArrowToolButton("连接")
+    lay.addWidget(head)
+
+    body = sample_body()
+    lay.addWidget(body)
+    head.toggled.connect(body.setVisible)
+    return box
 
 
 def variant_flat_pushbutton() -> QWidget:
@@ -190,15 +187,16 @@ def variant_flat_pushbutton() -> QWidget:
 
 
 def variant_groupbox_checkable() -> QWidget:
-    """④ QGroupBox(checkable)：原生标题 + 勾选框，最"系统"。
+    """④ ★ 应用现在用的：QGroupBox(checkable)，勾选框就是展开 / 收起。
 
-    注意：Qt 会在取消勾选时**禁用子控件**，所以这里收起时把 body 一并隐藏。
+    注意：Qt 会在取消勾选时**禁用子控件**，所以收起时要一并隐藏 body
+    （否则子控件会变灰；而且重新展开时 Qt 会无条件把它们 setEnabled(True)）。
     """
     box = QGroupBox("连接")
     box.setCheckable(True)
     box.setChecked(True)
     lay = QVBoxLayout(box)
-    lay.setContentsMargins(8, 8, 8, 8)
+    lay.setContentsMargins(8, 6, 8, 8)
     lay.setSpacing(6)
 
     body = sample_body()
@@ -297,12 +295,12 @@ def variant_command_link() -> QWidget:
 VARIANTS = [
     ("① QToolButton + setArrowType",
      "迁移前的实现：Qt 内绘小三角，颜色不跟主题", variant_old_arrow),
-    ("② QToolButton + 主题原生箭头（应用现在用的）",
+    ("② QToolButton + 主题原生箭头（备选）",
      "standardIcon(SP_ArrowDown/Right) + 加粗标题", variant_themed_toolbutton),
     ("③ QPushButton(flat, checkable)",
      "整行都是按钮，好点；文字左对齐要写样式表", variant_flat_pushbutton),
-    ("④ QGroupBox(checkable)",
-     "原生标题栏 + 勾选框，最“系统”；语义偏“启用 / 禁用本组”", variant_groupbox_checkable),
+    ("④ ★ QGroupBox(checkable)（应用现在用的）",
+     "原生标题栏 + 勾选框，最“系统”；勾选框 = 展开 / 收起", variant_groupbox_checkable),
     ("⑤ QGroupBox + 箭头",
      "原生分组外框，标题旁放主题箭头", variant_groupbox_arrow),
     ("⑥ Disclosure（无外框 + 分隔线）",
@@ -378,7 +376,7 @@ class Demo(QWidget):
     def _switch_style(self, name: str) -> None:
         style = QStyleFactory.create(name)
         if style is not None:
-            # 样式切换会发 StyleChange，ArrowToolButton / CollapsibleSection 会自己刷新箭头
+            # 样式切换会发 StyleChange，ArrowToolButton 会自己刷新箭头
             QApplication.setStyle(style)
 
 

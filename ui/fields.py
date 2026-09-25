@@ -9,18 +9,16 @@
 
 from __future__ import annotations
 
-from PyQt6.QtCore import QEvent, QSize, Qt, pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
-    QFrame,
+    QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QSizePolicy,
     QSpinBox,
-    QStyle,
-    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -152,40 +150,27 @@ class FieldRow(QWidget):
             self._syncing = False
 
 
-class CollapsibleSection(QFrame):
-    """可折叠分组：加粗标题 + 主题原生的折叠箭头，整行可点。
+class CollapsibleSection(QGroupBox):
+    """可折叠分组：`QGroupBox(checkable=True)`——勾选框就是展开 / 收起。
 
-    箭头用 `QStyle.standardIcon(SP_ArrowDown/Right)`，而不是
-    `QToolButton.setArrowType()`：前者由当前 QStyle（Kvantum / Fusion / …）
-    绘制，颜色随主题（深色主题下不会糊在背景里）；后者是 Qt 内绘的小三角。
-    样式在运行时被换掉时（`StyleChange`）重新取一次图标。
+    为什么用 checkable 的 QGroupBox：标题栏、勾选框、边框全部由当前 QStyle
+    （Kvantum / Fusion / …）绘制，深浅主题都不需要自己调色；自己画箭头反而容易
+    和主题不一致。
+
+    注意：Qt 会在**取消勾选时禁用全部子控件**。所以收起时必须把 `body` 一并
+    隐藏——否则子控件会变灰（虽然不可见），而且重新展开时 Qt 会把它们全部
+    `setEnabled(True)`，会覆盖掉我们自己设过的禁用状态（目前没有这种控件，
+    但将来加“根据其它字段禁用的控件”时要知道这一点）。
     """
 
-    _ARROW_OPEN = QStyle.StandardPixmap.SP_ArrowDown
-    _ARROW_CLOSED = QStyle.StandardPixmap.SP_ArrowRight
-
     def __init__(self, title: str, opened: bool = True, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self.setFrameShape(QFrame.Shape.StyledPanel)
+        super().__init__(title, parent)
+        self.setCheckable(True)
+        self.setChecked(opened)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(8, 6, 8, 8)
         outer.setSpacing(6)
-
-        self._toggle = QToolButton()
-        self._toggle.setText(title)
-        self._toggle.setCheckable(True)
-        self._toggle.setChecked(opened)
-        self._toggle.setAutoRaise(True)
-        self._toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self._toggle.setIconSize(QSize(14, 14))
-        self._toggle.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self._toggle.setMinimumHeight(26)
-        font = self._toggle.font()
-        font.setBold(True)
-        self._toggle.setFont(font)
-        self._toggle.toggled.connect(self._on_toggled)
-        outer.addWidget(self._toggle)
 
         self.body = QWidget()
         self.body.setVisible(opened)
@@ -194,20 +179,7 @@ class CollapsibleSection(QFrame):
         self.body_layout.setSpacing(6)
         outer.addWidget(self.body)
 
-        self._sync_arrow()
-
-    def _on_toggled(self, opened: bool) -> None:
-        self._sync_arrow()
-        self.body.setVisible(opened)
-
-    def _sync_arrow(self) -> None:
-        pm = self._ARROW_OPEN if self._toggle.isChecked() else self._ARROW_CLOSED
-        self._toggle.setIcon(self.style().standardIcon(pm))
-
-    def changeEvent(self, event) -> None:  # noqa: N802 (Qt 命名)
-        super().changeEvent(event)
-        if event.type() == QEvent.Type.StyleChange:
-            self._sync_arrow()
+        self.toggled.connect(self.body.setVisible)
 
     def add(self, widget: QWidget) -> None:
         self.body_layout.addWidget(widget)

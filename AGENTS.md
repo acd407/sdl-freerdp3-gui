@@ -197,6 +197,10 @@ selectProfile(name)                       newDraft()
    不要跨类型赋值（`QSpinBox` 只能吃 int，`QComboBox` 用 `itemData` 存枚举值）
 5. `QListWidget` 重建期间要置 `_rebuilding` 门闩，否则 `currentRowChanged` 会在
    填充过程中触发 `selectProfile`，把正在编辑的配置切走
+6. 分组折叠用 `QGroupBox(checkable=True)`（勾选框 = 展开）。坑：Qt 在取消勾选时
+   会**禁用全部子控件**，重新勾选时又无条件 `setEnabled(True)`。所以收起时必须把
+   `body` 隐藏（现在就是这么做的），并且**不要**把「按字段禁用控件」的状态直接
+   设在 QGroupBox 的子控件上——用户折叠一次就被 Qt 重置了
 
 > 迁移前的 QML 踩坑清单（自引用绑定 → abort、Repeater delegate 要
 > `required property`、`ScrollView` 没有 `boundsBehavior`、`Layout.preferredWidth`
