@@ -109,11 +109,11 @@ def main() -> int:
     address = win._rows["full address"]
     check("初始地址为空", address.control.text() == "")
 
-    # 真实编辑往返：改地址 → 预览更新
+    # 真实编辑往返：改地址就应立即生效（不能依赖 editingFinished / 失焦）
     address.control.setText("10.1.2.3")
-    address.control.editingFinished.emit()
     app.processEvents()
-    check("controller 收到编辑", controller.fields["full address"] == "10.1.2.3")
+    check("输入即收到编辑（无需失焦）", controller.fields["full address"] == "10.1.2.3")
+    check("输入即置脏（保存可用）", controller.dirty)
     check("预览包含地址", "full address:s:10.1.2.3" in controller.previewText,
           controller.previewText)
 

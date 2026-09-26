@@ -32,6 +32,7 @@ class AppController(QObject):
 
     - ``reloaded``    整体重载（载入配置 / 新建 / 保存 / 还原）→ 强制同步全部控件
     - ``valueEdited`` 单个字段被用户改动 → 同步全部控件，但跳过仍有焦点的文本框
+    - ``dirtyChanged`` 脏标记变化 → 只需刷新保存按钮 / 标题星号，不重建列表
     """
 
     profilesChanged = pyqtSignal()
@@ -39,6 +40,7 @@ class AppController(QObject):
     valueEdited = pyqtSignal(str)
     previewChanged = pyqtSignal()
     titleChanged = pyqtSignal()
+    dirtyChanged = pyqtSignal()
     statusChanged = pyqtSignal()
     passwordChanged = pyqtSignal()
 
@@ -213,8 +215,11 @@ class AppController(QObject):
         self.statusChanged.emit()
 
     def _mark(self, dirty: bool = True) -> None:
-        self._dirty = dirty
-        self.titleChanged.emit()
+        # 只发 dirtyChanged（保存按钮 / 标题星号），不发 titleChanged——后者会让
+        # 列表整体重建，不能每次编辑都做。标题文本是否变化由调用方另行通知。
+        if self._dirty != dirty:
+            self._dirty = dirty
+            self.dirtyChanged.emit()
 
     # ------------------------------------------------------------ 操作
 
@@ -268,7 +273,9 @@ class AppController(QObject):
         self._mark(True)
         self.valueEdited.emit(key)
         self.previewChanged.emit()
-        self.titleChanged.emit()
+        # 只有地址会改变草稿的显示名（title），此时才需要重建列表
+        if key == "full address":
+            self.titleChanged.emit()
 
     def saveAs(self, name: str) -> bool:
         if not name.strip():

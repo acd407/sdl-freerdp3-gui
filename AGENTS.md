@@ -90,6 +90,10 @@ selectProfile(name)                       newDraft()
 * `_reload_values()` 发 `reloaded`（全量、强制覆盖）；`setField()` 发 `valueEdited`，
   UI 同步时**跳过仍有焦点的 `QLineEdit`**（见 `FieldRow.set_value`），否则正在编辑、
   尚未提交的输入框会被重置。QML 时期靠「setField 默认不发 fieldsChanged」达到同一目的
+* 文本框用 `textChanged` 而不是 `editingFinished`：后者只在**失焦 / 回车**时才发，
+  会导致刚敲字时「保存」按钮不亮（踩过）。程序化 `setText` 由 `_syncing` 挡住
+* 脏标记单独走 `dirtyChanged`（标题星号 / 保存按钮），**不要**用它触发
+  `titleChanged`——后者会重建整个列表，每敲一个字闪一次
 * `saveAs` / `save` / `connectNow` 落盘后必须 `self._rdp = data`，
   否则紧接着的 `_reload_values()` 会从**旧内容**重算、清空表单（踩过）
 

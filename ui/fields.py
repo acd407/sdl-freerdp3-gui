@@ -69,7 +69,10 @@ class FieldRow(QWidget):
         if fld.widget in _TEXT_WIDGETS:
             w = QLineEdit()
             w.setClearButtonEnabled(True)
-            w.editingFinished.connect(self._emit_text)
+            # textChanged 而不是 editingFinished：后者只在焦点离开 / 回车时才发，
+            # 会导致用户刚敲字时「保存」按钮不亮。textChanged 每次编辑都发；
+            # 程序化 setText（set_value）被 _syncing 挡住。
+            w.textChanged.connect(self._emit_text)
             return w
 
         if fld.widget == schema.WIDGET_INT:
@@ -98,12 +101,12 @@ class FieldRow(QWidget):
 
         # 兜底：当文本框处理，至少不会崩
         w = QLineEdit()
-        w.editingFinished.connect(self._emit_text)
+        w.textChanged.connect(self._emit_text)
         return w
 
     # ------------------------------------------------------------ 事件
 
-    def _emit_text(self) -> None:
+    def _emit_text(self, _text: str = "") -> None:
         if not self._syncing:
             self.changed.emit(self.key, self.control.text())
 

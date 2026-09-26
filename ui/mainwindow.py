@@ -243,6 +243,7 @@ class MainWindow(QMainWindow):
         self.c.valueEdited.connect(lambda _key: self._sync_form())
         self.c.previewChanged.connect(self._sync_preview)
         self.c.titleChanged.connect(self._on_title_changed)
+        self.c.dirtyChanged.connect(self._on_dirty_changed)
         self.c.statusChanged.connect(self._sync_status)
         self.c.passwordChanged.connect(self._sync_password)
 
@@ -309,6 +310,11 @@ class MainWindow(QMainWindow):
         self._update_title()
         self._update_buttons()
         self._rebuild_list()
+
+    def _on_dirty_changed(self) -> None:
+        # 只是星号和按钮状态变了：不要重建列表（否则每敲一个字都闪一下）
+        self._update_title()
+        self._update_buttons()
 
     # ------------------------------------------------------------ 事件
 
